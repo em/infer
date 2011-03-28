@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+
+require 'find'
+
+
+# Take the first file if it's this much better than the alternatives:
+InferenceIndex = 0.01 # 1%
+
+
+results = []
+
+if ARGV.empty?
+print <<HEREDOC
+Usage: e [options] [keyword]...
+
+Recursively searches the current directory based on a set of keywords,
+launching the best match if it is better than the next by at least #{(InferenceIndex * 100).to_i}%.
+Otherwise it offers a choice.
+
+Options:
+  -l  List results, don't open
+  -a  Show all results, unlimited
+
+HEREDOC
+exit
+end
+
+opt_list = false
+
+ARGV.each do |a|
+  opt_list = true if a.match(/^-l/)
+end
+
+
+num_kw_chars = ARGV.join.length
+
+
+def rank_file fname
+  chars_matched = 0
+
+  ARGV.each do |condition|
+    return nil unless fname.include? condition
+    chars_matched += condition.length * fname.scan(condition).length if fname.include? condition
+  end
+
+  [fname, chars_matched.to_f / fname.length]
+end
+
+Find.find('./') do |fname|
+  r = rank_file fname
+  results << r unless r.nil?
+end
+
+results.sort! { |a,b| b[1] <=> a[1] }
+
+if results.empty?
+  puts "Didn't find shit."
+  exit
+end
+
+if results.count == 1 || results[0][1] - results[1][1] > InferenceIndex
+  exec "vim '%s'" % results[0][0]
+  exit
+end
+
+print "\nAmbiguous:\n\n"
+
+results[0..9].each_with_index do |result, i|
+  print "#{i}. "
+
+  10.times do |i|
+   print (result[1]/results[0][1]*10) < i ? ' ' : '|'
+  end
+
+  print " #{result[0]} \n"
+end
+
+if results.length > 9
+  puts "\n%d more hidden." % results.length
+end
+
+print  "\nTry refining the search,\nor pick one of the above (0-%d): " % [results.length, 9].min 
+
+sel = Integer(STDIN.gets) rescue nil
+
+exec "vim '%s'" % results[sel][0] unless sel.nil?
+
