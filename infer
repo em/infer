@@ -97,7 +97,7 @@ if results.empty?
 end
 
 if results.count == 1 || results[0][1] - results[1][1] > options[:inference_index]
-  exec "mate '%s'" % results[0][0]
+  exec "vim '%s'" % results[0][0]
   exit
 end
 
@@ -121,5 +121,5 @@ print  "\nTry refining the search,\nor pick one of the above (0-%d): " % [result
 
 sel = Integer(STDIN.gets) rescue nil
 
-exec "mate '%s'" % results[sel][0] unless sel.nil?
+exec "vim '%s'" % results[sel][0] unless sel.nil?
 
