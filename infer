@@ -19,7 +19,6 @@ $options = {
   },
 }
 
-#take keys of hash and transform those to a symbols
 def transform_keys_to_symbols(value)
   return value if not value.is_a?(Hash)
   hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = transform_keys_to_symbols(v); memo}
@@ -104,8 +103,7 @@ def exec_result(fname)
 
     command ||= $options[:handlers][:default]
   end
-  
- 
+   
   exec command.gsub /\$/, '"%s"' % fname.gsub('"','\"')
 end
 
