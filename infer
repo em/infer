@@ -19,6 +19,25 @@ $options = {
   },
 }
 
+#take keys of hash and transform those to a symbols
+def transform_keys_to_symbols(value)
+  return value if not value.is_a?(Hash)
+  hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = transform_keys_to_symbols(v); memo}
+  return hash
+end
+
+def load_options(fname)
+  fname = File.expand_path(fname)
+  # Load ~/.infer.yml$options
+  yml_options = YAML::load_file(fname) rescue return
+  yml_options = transform_keys_to_symbols(yml_options)
+  # yml_options = yml_options.inject({}){|memo,(k,v)| memo[k.to_sym] = v; memo}
+  $options.merge! yml_options
+end
+
+load_options('~/.infer.yml')
+load_options('./.infer.yml')
+
 
 if ARGV.empty?
 print <<HEREDOC
@@ -41,25 +60,6 @@ end
 
 results = []
 
-
-#take keys of hash and transform those to a symbols
-def transform_keys_to_symbols(value)
-  return value if not value.is_a?(Hash)
-  hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = transform_keys_to_symbols(v); memo}
-  return hash
-end
-
-def load_options(fname)
-  fname = File.expand_path(fname)
-  # Load ~/.infer.yml$options
-  yml_options = YAML::load_file(fname) rescue return
-  yml_options = transform_keys_to_symbols(yml_options)
-  # yml_options = yml_options.inject({}){|memo,(k,v)| memo[k.to_sym] = v; memo}
-  $options.merge! yml_options
-end
-
-load_options('~/.infer.yml')
-load_options('./.infer.yml')
 
 def invalid_arg(name)
   print "Options '#{name}' requires an argument.\n"
