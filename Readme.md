@@ -54,7 +54,7 @@ matchers:
 handlers:
   scalar_graphics: "open -a \"Adobe Photoshop CS5\" $"
   vector_graphics: "open -a \"Adobe Illustrator CS5\" $"
-  default: "vim $"  # Catch-all if nothing else is matched (change to mate if you use textmate, or whatever)
+  default: "vim $"  # Catch-all if nothing else is matched (make this your most general-purpose editor, e.g. mate)
 </pre>
 
 Installation
