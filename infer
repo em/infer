@@ -32,7 +32,7 @@ Options:
   -s  Show results and never open the infered file 
   -a  Show all results, unlimited
   -l  Limit number of results by n
-  -c  Command to execute the inference with (filename is $i)
+  -c  Command to execute the inference with (filename is $)
 
 HEREDOC
 exit
