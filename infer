@@ -106,8 +106,7 @@ def exec_result(fname)
   end
   
  
-  command.gsub! /\$/, '"%s"' % fname.gsub('"','\"')
-  exec command
+  exec command.gsub /\$/, '"%s"' % fname.gsub('"','\"')
 end
 
 def rank_file(fname)
