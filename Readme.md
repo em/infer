@@ -41,14 +41,16 @@ How it is opened is defined by "matchers" and "handlers" that can be defined in 
 
 Configuration
 ====================
-~/.infer.yml
+Example ~/.infer.yml
 <pre>
 inference_index: 0.1  # Open if first result is 10% better than the next
 
+# Regexes used to classify files by name
 matchers:
   scalar_graphics: "\\.(psg|png|jpeg|jpg|gif|tiff)$"
   vector_graphics: "\\.(ai|eps)$"
 
+# Commands that get executed on an inference, $ holds the full file name
 handlers:
   scalar_graphics: "open -a \"Adobe Photoshop CS5\" $"
   vector_graphics: "open -a \"Adobe Illustrator CS5\" $"
@@ -58,3 +60,15 @@ handlers:
 Installation
 ====================
 Simply make infer executable from the path and have ruby installed. It has no dependencies outside of the ruby standard library. Note: I've only tested with ruby 1.9.
+
+Todo
+====================
+* Make it possible to use mdfind and locate instead of recursing directories. Will give you the ability to opt for speed over integrity in really large projects.
+* Integration with vim, e.g. popping open an inference in a split.
+* Store results in the parent shell environment variables for quick subsequent commands on the results? Debating this.
+* Interactive mode
+* More options
+
+Notes
+====================
+It is *surprisingly* fast and yields good real-world results from the feedback I've received, despite it being a pretty simple approach.
