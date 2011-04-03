@@ -24,7 +24,7 @@ if ARGV.empty?
 print <<HEREDOC
 Usage: infer [options] [keyword]...
 
-Recursively searches the auwrent directory based on a set of keywords,
+Recursively searches the current directory based on a set of keywords,
 launching the best match if it is better than the next by at least #{($options[:inference_index] * 100).to_i}%.
 Otherwise it offers a choice
 
