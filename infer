@@ -62,7 +62,8 @@ load_options('~/.infer.yml')
 load_options('./.infer.yml')
 
 def invalid_arg(name)
-  print "Options '#{name}' requires an argument."
+  print "Options '#{name}' requires an argument.\n"
+  exit
 end
 
 # Apply command line$options
