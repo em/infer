@@ -44,13 +44,17 @@ Usage: infer [options] [keyword]...
 
 Recursively searches the current directory based on a set of keywords,
 launching the best match if it is better than the next by at least #{($options[:inference_index] * 100).to_i}%.
-Otherwise it offers a choice
+Otherwise it offers a choice.
 
 Options:
-  -s  Show results and never open the infered file 
-  -a  Show all results, unlimited
-  -l  Limit number of results by n
-  -c  Command to execute the inference with (filename is $)
+  -s    Show results and never open the inference 
+  -a    Show all results, unlimited
+  -l n  Limit number of results by n
+  -c    Command to execute the inference with (filename is $)
+  -t    Search tool. grep, locate, mdfind (default grep)
+  -i    Search inside files (may be slow, try using different search tool)
+
+  -(result_number)  Override inference with this result
 
 HEREDOC
 exit
@@ -74,7 +78,7 @@ ARGV.each_with_index do |a, i|
     v = match[2]
 
     case k
-    when 's'
+      when 's'
        $options[:show_only] = true
       when 'a'
        $options[:unlimited] = true
@@ -104,7 +108,9 @@ def exec_result(fname)
     command ||= $options[:handlers][:default]
   end
    
-  exec command.gsub /\$/, '"%s"' % fname.gsub('"','\"')
+  command = command.gsub /\$/, '"%s"' % fname.gsub('"','\"')
+  puts command
+  exec command
 end
 
 def rank_file(fname)
@@ -112,11 +118,11 @@ def rank_file(fname)
 
   ARGV.each do |condition|
     return nil unless fname.include? condition
-    chars_matched += condition.length * fname.scan(condition).length if fname.include? condition
+    chars_matched += condition.length * fname.scan(condition).length
   end
 
   [fname, chars_matched.to_f / fname.length]
-end
+end;
 
 # Use first option as search directory if it is a dir and outside of the CWD
 search_dir = (ARGV[0] if ARGV[0].match(/^[\~\.\/]/) && File.directory?(ARGV[0])) || './'
@@ -124,6 +130,7 @@ search_dir = (ARGV[0] if ARGV[0].match(/^[\~\.\/]/) && File.directory?(ARGV[0]))
 print "Searching #{search_dir}\n\n"
 
 Find.find(search_dir) do |fname|
+  fname += '/' if File.directory?(fname)
   r = rank_file fname
   results << r unless r.nil?
 end
@@ -135,9 +142,11 @@ if results.empty?
   exit
 end
 
-if results.count == 1 || results[0][1] - results[1][1] > $options[:inference_index]
-   exec_result results[0][0]
-  exit
+unless $options[:show_only]
+  if results.count == 1 || results[0][1] - results[1][1] > $options[:inference_index]
+       exec_result results[0][0]
+    exit
+  end
 end
 
 print "\nAmbiguous:\n\n"
