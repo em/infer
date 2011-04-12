@@ -62,7 +62,7 @@ end
 
 
 results = []
-
+num_kw_chars = ARGV.join.length
 
 def invalid_arg(name)
   print "Options '#{name}' requires an argument.\n"
@@ -93,7 +93,40 @@ ARGV.each_with_index do |a, i|
   end
 end
 
-num_kw_chars = ARGV.join.length
+
+def search(fname_keywords)
+
+  print "Searching #{search_dir}\n\n"
+
+  case $options[:searcher]
+    when 'grep'
+      grep_search fname_keywords, content_keywords
+    when 'mdfind'
+      mdfind_search fname_keywords, content_keywords
+    when 'locate'
+      locate_search fname_keywords, content_keywords
+    else
+      exhaustive_search fname_keywords, content_keywords
+  end
+end
+
+def grep_search(fname_keywords, content_keywords)
+end
+
+def mdfind_search
+
+end
+
+def exhaustive_search
+  results = [] 
+  Find.find(search_dir) do |fname|
+    fname += '/' if File.directory?(fname)
+    r = rank_file fname
+    results << r unless r.nil?
+  end
+  
+  results
+end
 
 def exec_result(fname)
   command = nil
@@ -122,18 +155,12 @@ def rank_file(fname)
   end
 
   [fname, chars_matched.to_f / fname.length]
-end;
+end
 
 # Use first option as search directory if it is a dir and outside of the CWD
 search_dir = (ARGV[0] if ARGV[0].match(/^[\~\.\/]/) && File.directory?(ARGV[0])) || './'
 
-print "Searching #{search_dir}\n\n"
-
-Find.find(search_dir) do |fname|
-  fname += '/' if File.directory?(fname)
-  r = rank_file fname
-  results << r unless r.nil?
-end
+results = search(search_dir)
 
 results.sort! { |a,b| b[1] <=> a[1] }
 
@@ -170,4 +197,5 @@ print  "\nTry refining the search,\nor pick one of the above (0-%d): " % [result
 sel = Integer(STDIN.gets) rescue nil
 
 exec_result results[sel][0] unless sel.nil?
+
 
