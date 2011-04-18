@@ -1,8 +1,13 @@
 Infer
 ====================
-I often found myself spending way too much time perusing directories to find a file I knew existed but was uncertain of its exact path. I also hated the decision to leave my working directory at the root of a project to a nested directory just because I expect to be running enough commands on the files within saving me the repetition of prefixing the paths.
+I often found myself spending way too much time perusing directories to find a file I knew existed, but was uncertain of its exact path. I also hated making the decision to leave my working directory at the root of a project to a nested directory just because I expect to be running enough commands on the files within saving me the repetition of prefixing the paths.
 
 Infer is a command line utility that makes it easy to immediately open a file for editing when you have prior knowledge of the path name.
+
+Design Goals
+====================
+* Do not reinvent the wheel; leverage the often unutilized power of grep and mdfind for the hard stuff.
+* Minimize keystrokes for the most common usecases, but not at the cost of unixisms. 
 
 Example
 ====================
@@ -60,6 +65,12 @@ handlers:
 Installation
 ====================
 Simply make infer executable from the path and have ruby installed. It has no dependencies outside of the ruby standard library. Note: I've only tested with ruby 1.9.
+
+
+Why mdfind is rad
+====================
+The HFS+ filesystem is built around the central metastore keeping in constant sync.
+
 
 Todo
 ====================
