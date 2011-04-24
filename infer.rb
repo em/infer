@@ -26,7 +26,7 @@ class Infer
       inference_index: 0.1, # 10%
       max_results: 10,
       unlimited_results: false,
-      # technique: 'mdfind',
+      #technique: 'mdfind',
 
       matchers: {
         graphics: "\.(png|jpeg|jpg|gif|tiff|psd)$",
@@ -93,6 +93,9 @@ class Infer
     end
   end
 
+  def add_result fname
+  end
+
   def mdfind_search search_dir 
     results = []
 
@@ -105,7 +108,7 @@ class Infer
    
     unless @fname_keywords.empty?
       # First we get all files that match any of the filenames (this includes directories)
-      query = "(%s)" % @fname_keywords.collect{|k| "kMDItemFSName = *%s*" % k}.join(' || ')
+      query = "(%s)" % @fname_keywords.collect{|k| "kMDItemDisplayName = *%s*" % k}.join(' || ')
 
       pp query
       pp search_dir
@@ -125,7 +128,7 @@ class Infer
 
     c_results = []
     unless @content_keywords.empty?
-      query = "(%s)" % @content_keywords.collect{|k| "kMDItemTextContent = '*%s*'cw" % k }.join(' && ')
+      query = "(%s)" % @content_keywords.collect{|k| "kMDItemTextContent = '%s*'cdw" % k }.join(' && ')
 
       pp query
       pp search_dir
@@ -195,11 +198,6 @@ class Infer
 
       opts.separator ""
       opts.separator "options:"
-
-      opts.on("-s", "--[no-]showonly", "show results and never open the inference") do |v|
-        @options[:show_only] = v
-      end
-
       opts.on("-n", "--inside [keywords]", "search inside files") do |v|
         @content_keywords << v
       end
@@ -211,6 +209,19 @@ class Infer
       opts.on("-t", "--technique [mdfind|grep]", "search technique to use") do |v|
         @options[:technique] = v ? 'mdfind' : ''
       end
+
+      opts.on("-s", "--[no-]showonly", "show results and never open the inference") do |v|
+        @options[:show_only] = v
+      end
+
+      opts.on("-a", "--all", "Do not truncate the results") do |v|
+        @options[:max_results] = 0
+      end
+
+      opts.on("--[no-]prompt", "Prompt for result selection") do |v|
+        @options[:prompt] = v
+      end
+
 
       opts.on("-v", "--[no-]verbose", "verbose output") do |v|
         @options[:verbose] = v
@@ -339,7 +350,9 @@ class Infer
       print "\nAmbiguous. Try refining the search.\n\n" 
     end
 
-    results[0..@options[:max_results]-1].each_with_index do |result, i|
+    result_count = @options[:max_results] || results.length
+
+    results[0..result_count-1].each_with_index do |result, i|
       print "#{i}. "
 
       10.times do |i|
@@ -353,10 +366,11 @@ class Infer
       puts "\n%d more hidden." % results.length
     end
 
-
-    print  "\nPick one of the resuls to launch (0-%d): " % [results.length-1, @options[:max_results]].min 
-    sel = Integer(STDIN.gets) rescue nil
-    exec_result results[sel][0] unless sel.nil?
+    if @options[:prompt]
+      print  "\nPick one of the results to launch (0-%d): " % result_count-1 
+      sel = Integer(STDIN.gets) rescue nil
+      exec_result results[sel][0] unless sel.nil?
+    end
   end
 
 
