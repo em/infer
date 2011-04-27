@@ -16,7 +16,18 @@ end
 
 class Infer
 
-  Keyword = Struct.new(:term, :case_sensitive)
+  class Keyword
+    @term = ''
+    @case_sensitive = false
+    
+    def initialize(term,case_sensitive=false) 
+
+    end
+
+    # Generate apple query expression
+    def qe_modifiers
+    end 
+  end
 
   def initialize(arguments)
     arguments = arguments.split(' ') if arguments.is_a? String
@@ -26,7 +37,11 @@ class Infer
       inference_index: 0.1, # 10%
       max_results: 10,
       unlimited_results: false,
-      #technique: 'mdfind',
+      technique: 'mdfind',
+      display_info: true,
+      display_ranks: true,
+      display_indices: true,
+      prompt: true,
 
       matchers: {
         graphics: "\.(png|jpeg|jpg|gif|tiff|psd)$",
@@ -40,6 +55,11 @@ class Infer
 
     @content_keywords = []
     @fname_keywords = []
+
+
+    load_options('~/.infrc') # load from home dir
+    load_options('./.infrc') # load from current dir
+
     parse_args
   end
 
@@ -64,28 +84,32 @@ class Infer
 
   def search search_dir
 
-    print "Searching #{search_dir}\n\n"
+    print "Searching #{search_dir}\n\n" if @options[:verbose]
 
     case @options[:technique]
       when 'grep'
         grep_search search_dir 
       when 'mdfind'
-        mdfind_search search_dir
-      when 'locate'
-        locate_search search_dir
+        begin
+          mdfind_search search_dir
+        rescue Errno::ENOENT
+          exhaustive_search search_dir
+        end
       else
         exhaustive_search search_dir
     end
   end
 
-  def grep_search(keywords)
+  # Grep for content search
+  def grep_search search_dir
+    args = ['-r']
   end
 
   def cleanup_path fname
     fname.strip!
   end
 
-  def mdfind_pipe args
+  def pipe_lines args
     IO.popen args do |out|
       while fname = out.readline rescue nil do
         yield fname
@@ -108,12 +132,16 @@ class Infer
    
     unless @fname_keywords.empty?
       # First we get all files that match any of the filenames (this includes directories)
-      query = "(%s)" % @fname_keywords.collect{|k| "kMDItemDisplayName = *%s*" % k}.join(' || ')
+      # We have to do this so we can recurse the directories, for the desired behavior
+      # of searching on path, instead of just filename as mdfind does
 
-      pp query
-      pp search_dir
+      # Note: DisplayName appears to be cached better than FSName, and is the same for files
+      query = "(%s)" % @fname_keywords.collect{|k| "kMDItemDisplayName = '*%s*'" % k}.join(' || ')
 
-      mdfind_pipe ['mdfind', '-onlyin', search_dir, query] do |fname|
+      # pp query
+      # pp search_dir
+
+      pipe_lines ['mdfind', '-onlyin', search_dir, query] do |fname|
         abs_to_rel! fname
         # puts fname
         r = rank_file fname
@@ -126,25 +154,30 @@ class Infer
       end
     end
 
+    # Now we filter the result by any content matches
     c_results = []
     unless @content_keywords.empty?
-      query = "(%s)" % @content_keywords.collect{|k| "kMDItemTextContent = '%s*'cdw" % k }.join(' && ')
+      query = "(%s)" % @content_keywords.collect{|k| "kMDItemTextContent = '%s'cdw" % k }.join(' && ')
 
-      pp query
-      pp search_dir
+      # pp query
+      # pp search_dir
 
-      mdfind_pipe ['mdfind', '-onlyin', search_dir, query] do |fname|
+      pipe_lines ['mdfind', '-onlyin', search_dir, query] do |fname|
         abs_to_rel! fname 
         c_results << fname
       end
-    end
 
-    # pp results
-    # pp c_results
-    #
-    if @fname_keywords.any? && @content_keywords.any?
-      results = results.keep_if do |r|
-        c_results.include? r[0]
+      # pp results
+      # pp c_results
+
+      # We take all content results if no path criteria,
+      # as if the default was all inclusive
+      if @fname_keywords.any?
+        results = results.keep_if do |r|
+          c_results.include? r[0]
+        end
+      else
+        results = c_results.map {|r| [r,1] }
       end
     end
     
@@ -191,18 +224,15 @@ class Infer
 
     [fname, chars_matched.to_f / fname.length]
   end
-
+  
   def parse_args
     opts = OptionParser.new do |opts|
-      opts.banner = "usage: infer [options] keywords"
+      opts.banner = "Usage: i [options] keywords..."
 
       opts.separator ""
-      opts.separator "options:"
-      opts.on("-n", "--inside [keywords]", "search inside files") do |v|
-        @content_keywords << v
-      end
+      opts.separator "Options:"
 
-      opts.on("-m", "--max-results [num]", "limit results") do |v|
+      opts.on("-m", "--max [num]", Integer, "Limit number of results") do |v|
         @options[:max_results] = v
       end
 
@@ -215,18 +245,39 @@ class Infer
       end
 
       opts.on("-a", "--all", "Do not truncate the results") do |v|
-        @options[:max_results] = 0
+        @options[:max_results] = nil 
       end
 
       opts.on("--[no-]prompt", "Prompt for result selection") do |v|
         @options[:prompt] = v
       end
 
+      opts.on("-p", "--plain", "Plain filename output; no indices, ranks, prompting, or unnecessary info.") do |v| 
+        @options[:display_info] = false 
+        @options[:display_ranks] = false 
+        @options[:display_indices] = false 
+        @options[:prompt] = false 
+      end
+
+      opts.on("-z", "--null", "Separate results with a null character instead of newline.") do |v|
+        @options[:terminator] = "\x00" 
+      end
+
+      opts.on("-g", "--global", "Global filesystem search") do |v|
+        @options[:global_search] = v
+      end
+
+      opts.on("-c [COMMAND]", "--command", "Execute command on inference") do |v|
+        @options[:command] = v
+      end
 
       opts.on("-v", "--[no-]verbose", "verbose output") do |v|
         @options[:verbose] = v
       end
 
+      opts.on("-[0-9]", "--index", Integer, "verbose output") do |v|
+        @override_index = v
+      end
 
       # no argument, shows at tail.  this will print an options summary.
       # try it and see!
@@ -244,130 +295,80 @@ class Infer
 
     opts.parse!(@arguments)
 
-
     # inside search special notation
     # parse search keywords
 
     @arguments.each_with_index do |a, i|
       case a
-        when /\-[0-9]/
-          
         when /^\/.+/
           @content_keywords << a.nibble
         else
           @fname_keywords << a
       end
 
-      @arguments.delete_at(i)
+      # @arguments.delete_at(i)
     end
 
   end
 
   def run
-
-    load_options('~/.infrc') # load from home dir
-    load_options('./.infrc') # load from current dir
-
-    parse_args
-   
-#     if argv.empty?
-#     print <<helpmessage
-#     usage: infer [options] [keyword]...
-# 
-#     recursively searches the current directory based on a set of keywords,
-#     launching the best match if it is better than the next by at least #{(@options[:inference_index] * 100).to_i}%.
-#     otherwise it offers a choice.
-# 
-#     search algorithm:
-#       * all keywords must be matched in the full relative path of a file
-#       * at least one of the keywords must match the filename
-# 
-#     options:
-#       -s    show results and never open the inference 
-#       -a    show all results, unlimited
-#       -l n  limit number of results by n
-#       -c    command to execute the inference with (filename is $)
-#       -i    search inside files (may be slow, try using different search tool)
-#       -(result_number)  override inference with this result
-# 
-#       -mdfind  speedy search with mdfind (osx only)
-# helpmessage
-#     exit
-#     end
-    # 
-    # # apply command line@options
-    # argv.each_with_index do |a, i|
-    #   opt_list = true if a.match(/^-l/)
-
-    #   a.match /^\\-([a-z]+)/ do |flags|
-    #     flags.match
-    #     k = match[1]
-    #     # v = match[2]
-
-    #     case k
-    #       when 's'
-    #        @options[:show_only] = true
-    #       when 'a'
-    #        @options[:unlimited] = true
-    #       when 'l'
-    #        @options[:limit] = v || argv.delete_at(i+1) || invalid_arg('l')
-    #       when 'c'
-    #        @options[:command] = v || argv.delete_at(i+1) || invalid_arg('c') 
-    #       when 'm'
-    #        @options[:searcher] = 'mdfind'
-    #     end
-
-    #     # remove arg so it's not treated as keyword
-    #     argv.delete_at(i)
-    #   end
-    # end
-
     results = []
     num_kw_chars = @fname_keywords.join.length
 
-
-    p @fname_args
-
    
     # use first option as search directory if it is a dir and outside of the cwd
-    search_dir = (@arguments[0] if @arguments[0] && @arguments[0].match(/^[\~\.\/]/) && file.directory?(@arguments[0])) || './'
+    search_dir = (@arguments[0] if @arguments[0] && @arguments[0].match(/^[\~\.\/]/) && File.directory?(@arguments[0])) || './'
+
+    search_dir = '/' if @options[:global_search] 
 
     results = search(search_dir)
 
     results.sort! { |a,b| b[1] <=> a[1] }
 
+
+
     if results.empty?
-      puts "Didn't find anything."
+      print "Didn't find anything.\n"
       exit
     end
 
-    unless @options[:show_only]
+    unless @options[:show_only] || !@options[:display_info]
       if results.count == 1 || results[0][1] - results[1][1] > @options[:inference_index]
            exec_result results[0][0]
         exit
       end
 
-      print "\nAmbiguous. Try refining the search.\n\n" 
+      print "\nAmbiguous. Try refining the search.\n" 
     end
 
-    result_count = @options[:max_results] || results.length
+    print "\n" if @options[:display_info]
 
-    results[0..result_count-1].each_with_index do |result, i|
-      print "#{i}. "
+    display_count = @options[:max_results] || results.length
 
-      10.times do |i|
-       print (result[1]/results[0][1]*10) < i ? ' ' : "\u2588"
+    results[0..display_count-1].each_with_index do |result, i|
+
+      if @options[:display_indices]
+        print "#{i}. ".rjust((display_count-1).to_s.length+2)
       end
 
-      print " #{result[0]} \n"
+      if @options[:display_ranks]
+        rank_ratio = result[1]/results[0][1]*10
+        rank_remainder = rank_ratio - Integer(rank_ratio)
+        partial_blocks = ["\u258F","\u258E","\u258D","\u258C","\u258B","\u258A","\u2589","\u2588"]
+        remainder_block = partial_blocks[rank_remainder * partial_blocks.length]
+
+        print ("\u2588"*(rank_ratio) + remainder_block).ljust(11)
+      end
+
+      print "#{result[0]} \n"
     end
 
-    if results.length > 9
-      puts "\n%d more hidden." % results.length
+    if results.length > display_count
+      puts "\n%d more hidden." % (results.length - display_count)
     end
 
     if @options[:prompt]
-      print  "\nPick one of the results to launch (0-%d): " % result_count-1 
+      print  "\nPick one of the results to launch (0-%d): " % (display_count-1) 
       sel = Integer(STDIN.gets) rescue nil
       exec_result results[sel][0] unless sel.nil?
     end
@@ -375,7 +376,6 @@ class Infer
 
 
   #run_util
-
 
 
   codes = %w[iso-2022-jp shift_jis euc-jp utf8 binary]
@@ -397,7 +397,12 @@ end  # class Infer
 
 if __FILE__ == $0
   trap("SIGINT") { puts " ya"; exit!; }
-  i = Infer.new(ARGV)
-  i.run
+
+  begin
+    i = Infer.new(ARGV)
+    i.run
+  rescue OptionParser::InvalidOption => e
+    puts e.message
+  end
 end
 
