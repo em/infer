@@ -15,23 +15,39 @@ class String
 end
 
 class Infer
+  attr :results, :options
 
   class Keyword
-    @term = ''
-    @case_sensitive = false
-    
+    attr :term, :case_sensitive
+ 
     def initialize(term,case_sensitive=false) 
-
+      @term = term
+      @case_sensitive = case_sensitive
     end
 
     # Generate apple query expression
     def qe_modifiers
     end 
   end
+  
+  class Result
+    include Comparable
+    attr :path, :rank
+
+    def <=>(other)
+     other.rank <=> rank
+    end
+
+    def initialize(path, rank)
+      @path = path
+      @rank = rank
+    end
+  end
 
   def initialize(arguments)
     arguments = arguments.split(' ') if arguments.is_a? String
     @arguments = arguments
+    @results = []
     
     @options = {
       inference_index: 0.1, # 10%
@@ -42,9 +58,10 @@ class Infer
       display_ranks: true,
       display_indices: true,
       prompt: true,
+      ignore: "^\\.",
 
       matchers: {
-        graphics: "\.(png|jpeg|jpg|gif|tiff|psd)$",
+        graphics: "\\.(png|jpeg|jpg|gif|tiff|psd)$",
       },
 
       handlers: {
@@ -54,7 +71,7 @@ class Infer
     }
 
     @content_keywords = []
-    @fname_keywords = []
+    @path_keywords = []
 
 
     load_options('~/.infrc') # load from home dir
@@ -69,9 +86,9 @@ class Infer
     return hash
   end
 
-  def load_options(fname)
-    fname = File.expand_path(fname)
-    yml_options = YAML::load_file(fname) rescue return
+  def load_options(path)
+    path = File.expand_path(path)
+    yml_options = YAML::load_file(path) rescue return
     yml_options = transform_keys_to_symbols(yml_options)
     # yml_options = yml_options.inject({}){|memo,(k,v)| memo[k.to_sym] = v; memo}
     @options.merge! yml_options
@@ -105,19 +122,22 @@ class Infer
     args = ['-r']
   end
 
-  def cleanup_path fname
-    fname.strip!
+  def cleanup_path path
+    path.strip!
   end
 
   def pipe_lines args
     IO.popen args do |out|
-      while fname = out.readline rescue nil do
-        yield fname
+      while path = out.readline rescue nil do
+        yield path
       end
     end
   end
 
-  def add_result fname
+  def add_result result
+    return false if @results.include? result
+    @results << result 
+    true
   end
 
   def mdfind_search search_dir 
@@ -125,30 +145,30 @@ class Infer
 
     @base_path = File.expand_path(search_dir) + '/'
 
-    def abs_to_rel! fname
-      fname.strip!
-      fname.slice! @base_path
+    def abs_to_rel! path
+      path.strip!
+      path.slice! @base_path
     end
    
-    unless @fname_keywords.empty?
+    unless @path_keywords.empty?
       # First we get all files that match any of the filenames (this includes directories)
       # We have to do this so we can recurse the directories, for the desired behavior
       # of searching on path, instead of just filename as mdfind does
 
       # Note: DisplayName appears to be cached better than FSName, and is the same for files
-      query = "(%s)" % @fname_keywords.collect{|k| "kMDItemDisplayName = '*%s*'" % k}.join(' || ')
+      query = "(%s)" % @path_keywords.collect{|k| "kMDItemDisplayName = '*%s*'" % k}.join(' || ')
 
       # pp query
       # pp search_dir
 
-      pipe_lines ['mdfind', '-onlyin', search_dir, query] do |fname|
-        abs_to_rel! fname
-        # puts fname
-        r = rank_file fname
+      pipe_lines ['mdfind', '-onlyin', search_dir, query] do |path|
+        abs_to_rel! path
+        # puts path
+        r = rank_file path
         results << r unless r.nil?
 
-        if File.directory? fname
-          results.concat exhaustive_search(fname)
+        if File.directory? path
+          exhaustive_search(path)
         end
 
       end
@@ -156,15 +176,15 @@ class Infer
 
     # Now we filter the result by any content matches
     c_results = []
-    unless @content_keywords.empty?
+    if @content_keywords.any?
       query = "(%s)" % @content_keywords.collect{|k| "kMDItemTextContent = '%s'cdw" % k }.join(' && ')
 
       # pp query
       # pp search_dir
 
-      pipe_lines ['mdfind', '-onlyin', search_dir, query] do |fname|
-        abs_to_rel! fname 
-        c_results << fname
+      pipe_lines ['mdfind', '-onlyin', search_dir, query] do |path|
+        abs_to_rel! path 
+        c_results << path
       end
 
       # pp results
@@ -172,57 +192,77 @@ class Infer
 
       # We take all content results if no path criteria,
       # as if the default was all inclusive
-      if @fname_keywords.any?
+      if @path_keywords.any?
         results = results.keep_if do |r|
           c_results.include? r[0]
         end
       else
-        results = c_results.map {|r| [r,1] }
+        results = c_results.map {|r| Result.new(r,1) }
       end
     end
-    
+ 
     results
   end
 
   def exhaustive_search search_dir
-    results = [] 
-    Find.find(search_dir) do |fname|
-      fname += '/' if File.directory?(fname)
-      fname.slice! './'
-      r = rank_file fname
-      results << r unless r.nil?
+    Find.find(search_dir) do |path|
+      path.slice! './'
+
+      if @options[:ignore] && File.basename(path).match(@options[:ignore])
+        Find.prune if File.directory?(path) # Don't recurse this dir
+        next # Don't save result
+      end
+
+      path += '/' if File.directory?(path)
+      rank = rank_file(path)
+      add_result rank unless rank.nil?
     end
     
-    results
   end
 
-  def exec_result(fname)
+  def exec_result(result)
     command = nil
 
     if @options[:command]
       command = @options[:command]
     else
       @options[:matchers].each do |type, pattern|
-        command = @options[:handlers][type] if fname.match(pattern) && @options[:handlers][type] 
+        command = @options[:handlers][type] if result.path.match(pattern) && @options[:handlers][type] 
       end
 
       command ||= @options[:handlers][:default]
     end
      
-    command = command.gsub /\$/, '"%s"' % fname.gsub('"','\"')
+    command = command.gsub /\$/, '"%s"' % result.path.gsub('"','\"')
     puts command
     exec command
   end
 
-  def rank_file(fname)
+  def rank_file(path)
     chars_matched = 0
+    content_matched = 0
 
-    @fname_keywords.each do |condition|
-      return nil unless fname.include? condition
-      chars_matched += condition.length * fname.scan(condition).length
+    @path_keywords.each do |condition|
+      return nil unless path.include? condition 
+      chars_matched += condition.length * path.scan(condition).length
     end
+    
+    if @content_keywords.any? && File.exists?(path) && !File.directory?(path)
+      File.open(path, "r") do |infile|
+        while (line = infile.gets)
+          @content_keywords.each do |kw|
+            if line.include? kw
+              content_matched += kw.length * line.scan(kw).length
+            end
+          end
+        end
+      end
+    end
+    
+    # pp content_matched
+    return nil if chars_matched == 0 && content_matched == 0
 
-    [fname, chars_matched.to_f / fname.length]
+    Result.new(path, chars_matched.to_f / path.length)
   end
   
   def parse_args
@@ -303,7 +343,7 @@ class Infer
         when /^\/.+/
           @content_keywords << a.nibble
         else
-          @fname_keywords << a
+          @path_keywords << a
       end
 
       # @arguments.delete_at(i)
@@ -312,47 +352,44 @@ class Infer
   end
 
   def run
-    results = []
-    num_kw_chars = @fname_keywords.join.length
-
-   
     # use first option as search directory if it is a dir and outside of the cwd
-    search_dir = (@arguments[0] if @arguments[0] && @arguments[0].match(/^[\~\.\/]/) && File.directory?(@arguments[0])) || './'
+    # search_dir = (@arguments[0] if @arguments[0] && @arguments[0].match(/^[\\~\\.\\/]/) && File.directory?(@arguments[0])) || './'
+    search_dir = './'
 
     search_dir = '/' if @options[:global_search] 
+    
 
-    results = search(search_dir)
+    search(search_dir)
 
-    results.sort! { |a,b| b[1] <=> a[1] }
+    @results.sort!
 
 
-
-    if results.empty?
+    if @results.empty?
       print "Didn't find anything.\n"
       exit
     end
 
     unless @options[:show_only] || !@options[:display_info]
-      if results.count == 1 || results[0][1] - results[1][1] > @options[:inference_index]
-           exec_result results[0][0]
+      if @results.count == 1 || @results[0].rank - @results[1].rank > @options[:inference_index]
+           exec_result @results[0]
         exit
       end
 
-      print "\nAmbiguous. Try refining the search.\n" 
+      print "\Too vague. Try refining the search.\n" 
     end
 
     print "\n" if @options[:display_info]
+    
+    display_count = @options[:max_results] || @results.length
 
-    display_count = @options[:max_results] || results.length
-
-    results[0..display_count-1].each_with_index do |result, i|
+    @results[0..display_count-1].each_with_index do |result, i|
 
       if @options[:display_indices]
         print "#{i}. ".rjust((display_count-1).to_s.length+2)
       end
 
       if @options[:display_ranks]
-        rank_ratio = result[1]/results[0][1]*10
+        rank_ratio = result.rank / @results[0].rank * 10
         rank_remainder = rank_ratio - Integer(rank_ratio)
         partial_blocks = ["\u258F","\u258E","\u258D","\u258C","\u258B","\u258A","\u2589","\u2588"]
         remainder_block = partial_blocks[rank_remainder * partial_blocks.length]
@@ -360,17 +397,17 @@ class Infer
         print ("\u2588"*(rank_ratio) + remainder_block).ljust(11)
       end
 
-      print "#{result[0]} \n"
+      print "#{result.path} \n"
     end
 
-    if results.length > display_count
-      puts "\n%d more hidden." % (results.length - display_count)
+    if @results.length > display_count
+      puts "\n%d more hidden." % (@results.length - display_count)
     end
 
     if @options[:prompt]
       print  "\nPick one of the results to launch (0-%d): " % (display_count-1) 
       sel = Integer(STDIN.gets) rescue nil
-      exec_result results[sel][0] unless sel.nil?
+      exec_result @results[sel] unless sel.nil?
     end
   end
 
