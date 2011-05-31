@@ -53,7 +53,7 @@ class Infer
       inference_index: 0.1, # 10%
       max_results: 10,
       unlimited_results: false,
-      technique: 'exhaustive',
+      technique: 'mdfind',
       display_info: true,
       display_ranks: true,
       display_indices: true,
@@ -315,7 +315,7 @@ class Infer
         @options[:verbose] = v
       end
 
-      opts.on("-[0-9]", "--index", Integer, "Manually specify a result offset to open") do |v|
+      opts.on("-[0-9]", "--index", Integer, "verbose output") do |v|
         @override_index = v
       end
 
