@@ -7,8 +7,7 @@ Infer is a command line utility that makes it easy to immediately open a file fo
 
 Installation
 ====================
-Simply make infer executable from the path and have ruby installed. It has no dependencies outside of the ruby standard library. Note: I've only tested with ruby 1.9.
-
+<pre>https://github.com/em/infer/raw/master/infer.rb -o /usr/local/bin/i</pre>
 
 Example
 ====================
