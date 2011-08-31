@@ -32,10 +32,14 @@ class Infer
   
   class Result
     include Comparable
-    attr :path, :rank
+    attr_accessor :path, :rank
 
     def <=>(other)
-     other.rank <=> rank
+      r = other.rank <=> rank
+      if r == 0
+        return other.path <=> path
+      end 
+      r
     end
 
     def initialize(path, rank)
@@ -50,15 +54,16 @@ class Infer
     @results = []
     
     @options = {
-      inference_index: 0.1, # 10%
-      max_results: 10,
+      inference_index: 0.01, # 10%
+      max_results: 40,
       unlimited_results: false,
-      technique: 'mdfind',
+      technique: 'exhaustive',
+      include_dirs: false,
       display_info: true,
       display_ranks: true,
       display_indices: true,
       prompt: true,
-      ignore: "^\\.",
+      ignore: "(^\\.|log/)",
 
       matchers: {
         graphics: "\\.(png|jpeg|jpg|gif|tiff|psd)$",
@@ -134,10 +139,22 @@ class Infer
     end
   end
 
-  def add_result result
-    return false if @results.include? result
-    @results << result 
+  def process_path path
+    rank = rank_path(path)
+    result = Result.new(path,rank)
+    # return false if @results.include? result
+    @results << result unless rank < 0
     true
+  end
+
+  def rerank_results
+    c_kw = @path_keywords + @filter.split(' ')
+
+    @results.each { |r|
+      r.rank = rank_path r.path, c_kw
+    }
+
+    @results.sort!
   end
 
   def mdfind_search search_dir 
@@ -164,7 +181,7 @@ class Infer
       pipe_lines ['mdfind', '-onlyin', search_dir, query] do |path|
         abs_to_rel! path
         # puts path
-        r = rank_file path
+        r = rank_path path
         results << r unless r.nil?
 
         if File.directory? path
@@ -204,6 +221,7 @@ class Infer
     results
   end
 
+
   def exhaustive_search search_dir
     Find.find(search_dir) do |path|
       path.slice! './'
@@ -214,8 +232,8 @@ class Infer
       end
 
       path += '/' if File.directory?(path)
-      rank = rank_file(path)
-      add_result rank unless rank.nil?
+      # rank = rank_path(path)
+      process_path path
     end
     
   end
@@ -238,19 +256,32 @@ class Infer
     exec command
   end
 
-  def rank_file(path)
+  def rank_path(path, p_kw=@path_keywords)
+
+    if p_kw.empty? && !path.empty?
+      return 1
+    end
+
+
     chars_matched = 0
     content_matched = 0
 
-    @path_keywords.each do |condition|
-      return nil unless path.include? condition 
+
+    if !@options[:include_dirs] && File.directory?(path)
+      return -1
+    end
+
+    p_kw.each do |condition|
+      return -1 unless path.include? condition 
       chars_matched += condition.length * path.scan(condition).length
     end
+
+    c_kw = @content_keywords
     
-    if @content_keywords.any? && File.exists?(path) && !File.directory?(path)
+    if c_kw.any? && File.exists?(path) && !File.directory?(path)
       File.open(path, "r") do |infile|
         while (line = infile.gets)
-          @content_keywords.each do |kw|
+          c_kw.each do |kw|
             if line.include? kw
               content_matched += kw.length * line.scan(kw).length
             end
@@ -260,9 +291,11 @@ class Infer
     end
     
     # pp content_matched
-    return nil if chars_matched == 0 && content_matched == 0
+    return -1 if chars_matched == 0 && content_matched == 0
 
-    Result.new(path, chars_matched.to_f / path.length)
+    # puts
+    # puts chars_matched.to_f / path.length
+    chars_matched.to_f / path.length
   end
   
   def parse_args
@@ -351,6 +384,181 @@ class Infer
 
   end
 
+  def read_char
+    system "stty raw -echo"
+    STDIN.getc
+  ensure
+    system "stty -raw echo"
+  end
+
+
+  BACKSPACE = "\u007F"
+
+  def filtering_loop
+    @selection  ||= 0
+
+    @filter = ''
+
+    begin
+      c = read_char
+      # pp c
+      # return
+
+      case c
+      when BACKSPACE
+        next if @filter.length == 0
+        @filter.chop!
+        print "\33[1D\33[K"
+
+        rerank_results
+      when "\e"
+        
+        if STDIN.getc == '['
+          d = STDIN.getc
+          if d == 'A'
+            @selection = [0, @selection-1].max
+            print "\33[1D\33[K"
+          end
+          if d == 'B'
+            @selection += 1
+            print "\33[1D\33[K"
+          end
+        else
+          STDIN.ungetc
+        end
+ 
+#         next if @filter.length == 0
+#         @filter = ''
+#         print "\\33[%dD\\n\\33[0K" % @filter.length
+      when "\r"
+        exec_result @results[@selection]
+
+      when /[0-9]/
+        @selection = Integer(c)
+        
+      when "\n"
+        exit 
+      else
+        @filter += c
+        print c
+        rerank_results
+        # print "\\33[1C"
+      end
+
+      print_results(@filter)
+
+    end until c == "\n" || c == "\r"
+
+    exit
+
+  end
+
+
+  def print_results(filter=nil)
+
+
+    flen = filter ? filter.length : 0
+
+    results = @results
+
+    if filter
+      print  "\33[1B\33[%dD" % (19 + flen)
+
+      c_kw = @path_keywords + filter.split(' ')
+    else
+      print  "Filter: \n"
+      # print  "\\33[7mFilter 100 files: \\n\\n"
+    end
+  
+
+    # Erase to end of screen
+    print "\33[J\n"
+
+
+    display_count = @options[:max_results] || results.length
+
+    selection = @selection || 0
+    outputted = 0
+    first_result = nil 
+    results.each_with_index do |result, i|
+
+      # next unless !filter || result.path.include?(filter)
+
+      next if result.rank < 0
+
+      break if outputted >= display_count
+
+      selected = (selection == outputted)
+
+      first_result ||= result
+
+      outputted += 1
+
+      if !selected 
+        # print "\\33[37m"
+      end
+      
+      if @options[:display_indices]
+        print selected ? "\u25B6" : ' '
+        print " #{i} ".rjust((display_count-1).to_s.length+2)
+      end
+
+      if @options[:display_ranks]
+        rank_ratio = result.rank / first_result.rank * 5
+        rank_remainder = rank_ratio - Integer(rank_ratio)
+        partial_blocks = ["\u258F","\u258E","\u258D","\u258C","\u258B","\u258A","\u2589","\u2588"]
+        remainder_block = partial_blocks[rank_remainder * partial_blocks.length]
+
+
+        print ("\u2588"*(rank_ratio) + remainder_block).ljust(6)
+      end
+
+      print "#{result.path}".ljust(40)
+      
+      if selected
+        # print " <- launch with <enter>"
+      else
+        print "\33[0m"
+      end
+
+      print "\n"
+      
+    end
+
+
+    # print "\\33[J"
+  
+    # count = results.reduce(0) {|r,c| c += 1; break if r.rank.nil? }
+    count = results.find_index {|r| r.rank.nil?} || results.length
+
+    if count > display_count
+      puts "\n%d more hidden.\n" % (count - display_count)
+      outputted += 2
+    end
+
+
+    # Move cursor up to filter
+    print "\33[%dA\33[%dC" % [outputted+2,8 + flen]
+
+
+
+
+
+    if @options[:prompt]
+      # print  "\\nPick one of the results to launch (0-%d): " % (display_count-1) 
+
+      # puts "\\33[%dA" % 5
+      # puts "\\33[J"
+      #
+
+      # filtering_loop
+
+      # sel = Integer(read_char) rescue nil
+      # exec_result @results[sel] unless sel.nil?
+    end
+
+  end
+
   def run
     # use first option as search directory if it is a dir and outside of the cwd
     # search_dir = (@arguments[0] if @arguments[0] && @arguments[0].match(/^[\\~\\.\\/]/) && File.directory?(@arguments[0])) || './'
@@ -375,49 +583,15 @@ class Infer
         exit
       end
 
-      print "\Too vague. Try refining the search.\n" 
+      # print "\\Too vague. Try refining the search.\\n" 
     end
 
     print "\n" if @options[:display_info]
-    
-    display_count = @options[:max_results] || @results.length
 
-    @results[0..display_count-1].each_with_index do |result, i|
-
-      if @options[:display_indices]
-        print "#{i}. ".rjust((display_count-1).to_s.length+2)
-      end
-
-      if @options[:display_ranks]
-        rank_ratio = result.rank / @results[0].rank * 10
-        rank_remainder = rank_ratio - Integer(rank_ratio)
-        partial_blocks = ["\u258F","\u258E","\u258D","\u258C","\u258B","\u258A","\u2589","\u2588"]
-        remainder_block = partial_blocks[rank_remainder * partial_blocks.length]
-
-        print ("\u2588"*(rank_ratio) + remainder_block).ljust(11)
-      end
-
-      print "#{result.path} \n"
-    end
-
-    if @results.length > display_count
-      puts "\n%d more hidden." % (@results.length - display_count)
-    end
-
-    if @options[:prompt]
-      print  "\nPick one of the results to launch (0-%d): " % (display_count-1) 
-      sel = Integer(STDIN.gets) rescue nil
-      exec_result @results[sel] unless sel.nil?
-    end
+    print_results
+    filtering_loop
   end
-
-
-  #run_util
-
-
-  codes = %w[iso-2022-jp shift_jis euc-jp utf8 binary]
-  code_aliases = { "jis" => "iso-2022-jp", "sjis" => "shift_jis" }
-
+ 
   #
   # return a structure describing the options.
   #
