@@ -259,6 +259,11 @@ class Infer
 
   def rank_path(path, p_kw=@path_keywords)
 
+    unless @case_sensitive
+      path = path.downcase
+      p_kw = p_kw.map {|kw| kw.downcase }
+    end
+
     if p_kw.empty? && !path.empty?
       return 1
     end
@@ -396,7 +401,6 @@ class Infer
   ensure
     system "stty -raw echo"
   end
-
 
   BACKSPACE = "\u007F"
 
@@ -626,3 +630,5 @@ if __FILE__ == $0
   end
 end
 
+
+[0,1,2].map {|i| i + 1 }
