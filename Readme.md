@@ -1,9 +1,8 @@
 Infer
 ====================
+Infer is a command line utility that makes it easy to immediately open a file for editing when you have prior knowledge of its relative path.
+
 I often found myself spending way too much time perusing directories to find a file I knew existed, but was uncertain of its exact path. I also hated making the decision to leave my working directory at the root of a project to a nested directory just because I expect to be running enough commands on the files within saving me the repetition of prefixing the paths.
-
-Infer is a command line utility that makes it easy to immediately open a file for editing when you have prior knowledge of the path name.
-
 
 Installation
 ====================
@@ -54,6 +53,12 @@ i http -sa
 The options -sa are "show only" and "all results".
 You'll notice in these results lib/http.js is significantly higher than the proceeding pathname.
 Enough that simply running <pre>i http</pre> would immediately open it your configured editor.
+
+Now, if I wanted `deps/http_parser/http_parser.c` all I have to do is make it less ambiguous:
+```
+i http .c
+```
+This is enough to boost http_parser.c past the other results and open it immediately.
 
 Configuration
 ====================
