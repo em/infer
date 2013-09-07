@@ -7,7 +7,9 @@ Infer is a command line utility that makes it easy to immediately open a file fo
 
 Installation
 ====================
-<pre>curl http://github.com/em/infer/raw/master/infer.rb -o /usr/local/bin/i</pre>
+```
+curl -L http://github.com/em/infer/raw/master/infer.rb -o /usr/local/bin/i && chmod +x !#:4
+```
 
 Example
 ====================
