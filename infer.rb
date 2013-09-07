@@ -432,14 +432,14 @@ class Infer
             @selection = [0, @selection-1].max
             print "\33[1D\33[K"
           end
-          if d == 'B'
+          if d == 'B' && @selection+1 < @display_count
             @selection += 1
             print "\33[1D\33[K"
           end
         else
           STDIN.ungetc
         end
- 
+
 #         next if @filter.length == 0
 #         @filter = ''
 #         print "\\33[%dD\\n\\33[0K" % @filter.length
@@ -488,7 +488,11 @@ class Infer
     print "\33[J\n"
 
 
-    display_count = @options[:max_results] || results.length
+    if @options[:max_results]
+      @display_count = [@options[:max_results], results.length].min
+    else
+      @display_count = results.length
+    end
 
     selection = @selection || 0
     outputted = 0
@@ -499,7 +503,7 @@ class Infer
 
       next if result.rank < 0
 
-      break if outputted >= display_count
+      break if outputted >= @display_count
 
       selected = (selection == outputted)
 
@@ -513,7 +517,7 @@ class Infer
       
       if @options[:display_indices]
         print selected ? "\u25B6" : ' '
-        print " #{i} ".rjust((display_count-1).to_s.length+2)
+        print " #{i} ".rjust((@display_count-1).to_s.length+2)
       end
 
       if @options[:display_ranks]
@@ -544,8 +548,8 @@ class Infer
     # count = results.reduce(0) {|r,c| c += 1; break if r.rank.nil? }
     count = results.find_index {|r| r.rank.nil?} || results.length
 
-    if count > display_count
-      puts "\n%d more hidden.\n" % (count - display_count)
+    if count > @display_count
+      puts "\n%d more hidden.\n" % (count - @display_count)
       outputted += 2
     end
 
