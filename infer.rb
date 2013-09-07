@@ -415,6 +415,10 @@ class Infer
       # return
 
       case c
+      when "\u0003" # ^C
+        puts 'quit'
+        return
+      
       when BACKSPACE
         next if @filter.length == 0
         @filter.chop!
@@ -436,13 +440,8 @@ class Infer
             @selection += 1
             print "\33[1D\33[K"
           end
-        else
-          STDIN.ungetc
         end
 
-#         next if @filter.length == 0
-#         @filter = ''
-#         print "\\33[%dD\\n\\33[0K" % @filter.length
       when "\r"
         exec_result @results[@selection]
 
