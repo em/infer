@@ -1,8 +1,6 @@
 Infer
 ====================
-Infer is a command line utility that makes it easy to immediately open a file for editing when you have prior knowledge of its relative path.
-
-I often found myself spending way too much time perusing directories to find a file I knew existed, but was uncertain of its exact path. I also hated making the decision to leave my working directory at the root of a project to a nested directory just because I expect to be running enough commands on the files within saving me the repetition of prefixing the paths.
+Infer (i) is a command line utility for rapidly opening files based on keyword ranks. If the closest match is higher than a degree of certainty (default 10%) the file will be opened in your configured editor (default vim).
 
 ```
 $ i -h
@@ -96,3 +94,4 @@ handlers:
   vector_graphics: "open -a \"Adobe Illustrator CS5\" $"
   default: "vim $"  # Catch-all if nothing else is matched (make this your most general-purpose editor, e.g. mate)
 </pre>
+
