@@ -317,11 +317,11 @@ class Infer
         @options[:max_results] = v
       end
 
-      opts.on("-t", "--technique [mdfind|grep]", "search technique to use") do |v|
+      opts.on("-t", "--technique [mdfind|grep]", "Search technique to use") do |v|
         @options[:technique] = v ? 'mdfind' : ''
       end
 
-      opts.on("-s", "--[no-]showonly", "show results and never open the inference") do |v|
+      opts.on("-s", "--[no-]showonly", "Show results and never open the inference") do |v|
         @options[:show_only] = v
       end
 
@@ -352,24 +352,18 @@ class Infer
         @options[:command] = v
       end
 
-      opts.on("-v", "--[no-]verbose", "verbose output") do |v|
+      opts.on("-v", "--[no-]verbose", "Verbose output") do |v|
         @options[:verbose] = v
       end
 
-      opts.on("-[0-9]", "--index", Integer, "verbose output") do |v|
+      opts.on("-[0-9]", "--index", Integer, "Force open result n") do |v|
         @override_index = v
       end
 
       # no argument, shows at tail.  this will print an options summary.
       # try it and see!
-      opts.on_tail("-h", "--help", "show this message") do
+      opts.on_tail("-h", "--help", "Show this message") do
         puts opts
-        exit
-      end
-
-      # another typical switch to print the version.
-      opts.on_tail("--version", "show version") do
-        puts 1.0 
         exit
       end
     end

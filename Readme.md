@@ -4,6 +4,25 @@ Infer is a command line utility that makes it easy to immediately open a file fo
 
 I often found myself spending way too much time perusing directories to find a file I knew existed, but was uncertain of its exact path. I also hated making the decision to leave my working directory at the root of a project to a nested directory just because I expect to be running enough commands on the files within saving me the repetition of prefixing the paths.
 
+```
+$ i -h
+Usage: i [options] keywords...
+
+Options:
+    -m, --max [num]                  Limit number of results
+    -t, --technique [mdfind|grep]    Search technique to use
+    -s, --[no-]showonly              Show results and never open the inference
+    -a, --all                        Do not truncate the results
+        --[no-]prompt                Prompt for result selection
+    -p, --plain                      Plain filename output; no indices, ranks, prompting, or unnecessary info.
+    -z, --null                       Separate results with a null character instead of newline.
+    -g, --global                     Global filesystem search
+    -c, --command [COMMAND]          Execute command on inference
+    -v, --[no-]verbose               Verbose output
+    -[0-9], --index                  Force open result n
+    -h, --help                       Show this message
+```
+
 Installation
 ====================
 ```
