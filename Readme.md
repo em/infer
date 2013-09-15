@@ -95,3 +95,11 @@ handlers:
   default: "vim $"  # Catch-all if nothing else is matched (make this your most general-purpose editor, e.g. mate)
 </pre>
 
+# Pro tip
+```
+I <command> keywords
+^ capitalize to specify a command explicitly
+
+I use this all the time to open html instead of edit it:
+I open index.html
+```

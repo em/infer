@@ -85,6 +85,14 @@ class Infer
     parse_args
   end
 
+  def term_lines
+    `tput lines`.to_i
+  end
+
+  def term_cols
+    `tput lines`.to_i
+  end
+
   def transform_keys_to_symbols(value)
     return value if not value.is_a?(Hash)
     hash = value.inject({}){|memo,(k,v)| memo[k.to_sym] = transform_keys_to_symbols(v); memo}
