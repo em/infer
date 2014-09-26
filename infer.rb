@@ -529,12 +529,15 @@ class Infer
         partial_blocks = ["\u258F","\u258E","\u258D","\u258C","\u258B","\u258A","\u2589","\u2588"]
         remainder_block = partial_blocks[rank_remainder * partial_blocks.length]
 
-
         print ("\u2588"*(rank_ratio) + remainder_block).ljust(6)
       end
 
-      print "#{result.path}".ljust(40).slice(0,width-13)
-      
+      line = "#{result.path}"
+
+      # This is the best way to do a normal slice(-n) apparently
+      # Ruby is fucking stupid.
+      print line.split(//).last(width-12).join('')
+ 
       if selected
         # print " <- launch with <enter>"
       else
