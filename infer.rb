@@ -470,6 +470,8 @@ class Infer
 
   def print_results(filter=nil)
 
+    width = `tput cols`.to_i
+    height = `tput lines`.to_i
 
     flen = filter ? filter.length : 0
 
@@ -490,7 +492,7 @@ class Infer
 
 
     if @options[:max_results]
-      @display_count = [@options[:max_results], results.length].min
+      @display_count = [@options[:max_results], results.length, height-5].min
     else
       @display_count = results.length
     end
@@ -531,7 +533,7 @@ class Infer
         print ("\u2588"*(rank_ratio) + remainder_block).ljust(6)
       end
 
-      print "#{result.path}".ljust(40)
+      print "#{result.path}".ljust(40).slice(0,width-13)
       
       if selected
         # print " <- launch with <enter>"
